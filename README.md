@@ -1,0 +1,1 @@
+This repository is a simple Black-Scholes Pricing Model, cf. check the `bsp.ipynb` file.
