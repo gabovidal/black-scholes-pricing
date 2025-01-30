@@ -41,8 +41,8 @@ st.markdown("""
                .block-container {
                     padding-top: 2rem;
                     padding-bottom: 0rem;
-                    padding-left: 5rem;
-                    padding-right: 5rem;
+                    padding-left: 2rem;
+                    padding-right: 2rem;
                 }
         </style>
         """, unsafe_allow_html=True)
@@ -128,10 +128,10 @@ def plot_heatmap(TYPE, values, ax, vols, spots, palette, show_pnl=False, center=
     ax.collections[0].colorbar.ax.yaxis.set_ticks([], minor=True)
     price = values[4, 4]
     if show_pnl:
-        title = f'{TYPE} PnL $ = {price:+.2f}'
+        title = f'{TYPE} PnL = {price:+.2f}'
     else:
-        title = f'{TYPE} Price $ = {price:.2f}'
-    ax.set_title(title, fontsize=16, pad=10)
+        title = f'{TYPE} Price = {price:.2f}'
+    ax.set_title(title, fontsize=18, fontweight='bold', pad=12)
     ax.set_xlabel('Current Stock Price (S)', fontsize=13)
     ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
     ax.invert_yaxis()
@@ -160,8 +160,8 @@ if st.session_state.active_tab == 'prices':
         vmax = max(calls.max(), puts.max())
         vmin = 0
         center = None
-    fig_call, ax_call = plt.subplots(figsize=(8, 5))
-    fig_put, ax_put = plt.subplots(figsize=(8, 5))
+    fig_call, ax_call = plt.subplots(figsize=(7, 5))
+    fig_put, ax_put = plt.subplots(figsize=(7, 5))
     for col, fig, TYPE, values, ax in [(col1, fig_call, 'CALL', calls, ax_call), (col2, fig_put, 'PUT', puts, ax_put)]:
         with col:
             plot_heatmap(TYPE, values, ax, vols, spots, palette,
