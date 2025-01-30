@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from scipy.stats import norm
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -12,6 +11,7 @@ from matplotlib.colors import SymLogNorm, Normalize
 import matplotlib.ticker as tkr
 from matplotlib.patches import Rectangle
 from math import ceil, floor
+import seaborn as sns
 
 
 def compute_prices(S, K, r, sigma, T, buy):
