@@ -32,8 +32,8 @@ def price_heatmap():
 
 # configure page
 st.set_page_config(
-    page_title="Black-Scholes Pricing Model", layout="wide", page_icon="📊")
-st.title("Black-Scholes Pricing Model")
+    page_title="Black-Scholes Option Pricing", layout="wide", page_icon="📊", initial_sidebar_state="expanded")
+st.title("Black-Scholes Option Pricing")
 
 # reduce paddings
 st.markdown("""
@@ -108,9 +108,9 @@ with st.sidebar:
 
     elif st.session_state.active_tab == 'about':
         # st.header("About")
-        st.write("Explore the different tabs to view financial data:")
-        st.write("- **Volatility**: 3D implied volatility surface")
-        st.write("- **History**: Historical price charts")
+        st.write("Data:")
+        st.write("- **Volatility**:")
+        st.write("- **Current Price**: ")
 
     # Global settings
     st.markdown("---")
@@ -122,79 +122,51 @@ with st.sidebar:
              unsafe_allow_html=True)
 
 
+def plot_heatmap(TYPE, values, ax, vols, spots, palette, show_pnl=False, center=None, vmin=None, vmax=None):
+    sns.heatmap(values, cmap=palette, ax=ax, xticklabels=np.round(spots, 2), yticklabels=np.round(
+        vols*100, 2), fmt="+.2f" if show_pnl else ".2f", annot=True, center=center, vmin=vmin, vmax=vmax)
+    ax.collections[0].colorbar.ax.yaxis.set_ticks([], minor=True)
+    price = values[4, 4]
+    if show_pnl:
+        title = f'{TYPE} PnL $ = {price:+.2f}'
+    else:
+        title = f'{TYPE} Price $ = {price:.2f}'
+    ax.set_title(title, fontsize=16, pad=10)
+    ax.set_xlabel('Current Stock Price (S)', fontsize=13)
+    ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
+    ax.invert_yaxis()
+    ax.add_patch(
+        Rectangle((4, 0), 1, 9, edgecolor='black', fill=False, lw=1, alpha=0.8))
+    ax.add_patch(
+        Rectangle((0, 4), 9, 1, edgecolor='black',
+                  fill=False, lw=1, alpha=0.8))
+    ax.add_patch(
+        Rectangle((4, 4), 1, 1, edgecolor='black', fill=False, lw=2))
+
+
 # Main content based on active tab
 if st.session_state.active_tab == 'prices':
-    col = st.columns(1)[0]
+    col1, col2 = st.columns([1, 1])
     colorblind = st.checkbox("Color blind-friendly palette")
-    with col:
-        calls, puts = price_heatmap()
-        if show_pnl:
-            vmin = min(calls.min(), puts.min())
-            vmax = max(calls.max(), puts.max())
-            # v = floor(min(abs(vmin), abs(vmax)))
-            # def copysign(x, y): return x if y > 0 else -x
-            # vmin, vmax = copysign(v, vmin), copysign(v, vmax)
-
-            fig, (ax_call, ax_put) = plt.subplots(1, 2, figsize=(16, 5))
-            fig.tight_layout()
-
-            # log_norm = SymLogNorm(0.50, vmin=vmin, vmax=vmax)
-            # ticks = np.concatenate((-np.logspace(np.log10(v), np.log10(0.001), 4)
-            #                        [:-2], [0], np.logspace(np.log10(0.001), np.log10(v), 4)[2:]))
-            # formatter = tkr.ScalarFormatter(useMathText=True)
-            # formatter.set_scientific(False)
-
-            vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
-            spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
-            if colorblind:
-                palette = 'viridis'
-            else:
-                palette = 'RdYlGn'
-            for title, values, ax in [('CALL', calls, ax_call), ('PUT', puts, ax_put)]:
-                sns.heatmap(values, cmap=palette, ax=ax, xticklabels=np.round(spots, 2), yticklabels=np.round(
-                    # , norm=log_norm, cbar_kws={"ticks": ticks, "format": formatter})
-                    vols*100, 2), fmt="+.2f", annot=True, center=0, vmin=vmin, vmax=vmax)
-                ax.collections[0].colorbar.ax.yaxis.set_ticks([], minor=True)
-                ax.set_title(f'{title} PnL $ = {
-                             values[4, 4]:+.2f}', fontsize=16, pad=10)
-                ax.set_xlabel('Current Stock Price (S)', fontsize=13)
-                ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
-                ax.invert_yaxis()
-                ax.add_patch(
-                    Rectangle((4, 0), 1, 9, edgecolor='black', fill=False, lw=1, alpha=0.8))
-                ax.add_patch(
-                    Rectangle((0, 4), 9, 1, edgecolor='black',
-                              fill=False, lw=1, alpha=0.8))
-                ax.add_patch(
-                    Rectangle((4, 4), 1, 1, edgecolor='black', fill=False, lw=2))
-        else:
-            vmax = max(calls.max(), puts.max())
-
-            fig, (ax_call, ax_put) = plt.subplots(1, 2, figsize=(16, 5))
-            fig.tight_layout()
-
-            vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
-            spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
-            if colorblind:
-                palette = 'viridis'
-            else:
-                palette = 'RdYlGn'
-            for title, values, ax in [('CALL', calls, ax_call), ('PUT', puts, ax_put)]:
-                sns.heatmap(values, cmap=palette, ax=ax, xticklabels=np.round(
-                    spots, 2), yticklabels=np.round(vols*100, 2), fmt=".2f", annot=True, vmin=0, vmax=vmax)
-                ax.set_title(f'{title} Price $ = {
-                             values[4, 4]:.2f}', fontsize=16, pad=10)
-                ax.set_xlabel('Current Stock Price (S)', fontsize=13)
-                ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
-                ax.invert_yaxis()
-                ax.add_patch(
-                    Rectangle((4, 0), 1, 9, edgecolor='black', fill=False, lw=1, alpha=0.8))
-                ax.add_patch(
-                    Rectangle((0, 4), 9, 1, edgecolor='black',
-                              fill=False, lw=1, alpha=0.8))
-                ax.add_patch(
-                    Rectangle((4, 4), 1, 1, edgecolor='black', fill=False, lw=2))
-        st.pyplot(fig)
+    palette = 'viridis' if colorblind else 'RdYlGn'
+    vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
+    spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
+    calls, puts = price_heatmap()
+    if show_pnl:
+        vmin = min(calls.min(), puts.min())
+        vmax = max(calls.max(), puts.max())
+        center = 0
+    else:
+        vmax = max(calls.max(), puts.max())
+        vmin = 0
+        center = None
+    fig_call, ax_call = plt.subplots(figsize=(8, 5))
+    fig_put, ax_put = plt.subplots(figsize=(8, 5))
+    for col, fig, TYPE, values, ax in [(col1, fig_call, 'CALL', calls, ax_call), (col2, fig_put, 'PUT', puts, ax_put)]:
+        with col:
+            plot_heatmap(TYPE, values, ax, vols, spots, palette,
+                         show_pnl, center, vmin, vmax)
+            st.pyplot(fig)
 
 elif st.session_state.active_tab == 'volatility':
     st.header("TODO")
