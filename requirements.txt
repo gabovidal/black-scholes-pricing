@@ -5,4 +5,3 @@ scipy
 yfinance
 plotly
 matplotlib
-math
