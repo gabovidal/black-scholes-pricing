@@ -160,8 +160,8 @@ if st.session_state.active_tab == 'prices':
         vmax = max(calls.max(), puts.max())
         vmin = 0
         center = None
-    fig_call, ax_call = plt.subplots(figsize=(7, 5))
-    fig_put, ax_put = plt.subplots(figsize=(7, 5))
+    fig_call, ax_call = plt.subplots(figsize=(8, 5))
+    fig_put, ax_put = plt.subplots(figsize=(8, 5))
     for col, fig, TYPE, values, ax in [(col1, fig_call, 'CALL', calls, ax_call), (col2, fig_put, 'PUT', puts, ax_put)]:
         with col:
             plot_heatmap(TYPE, values, ax, vols, spots, palette,
