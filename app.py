@@ -10,6 +10,7 @@ from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm, Normalize
 import matplotlib.ticker as tkr
+from matplotlib.patches import Rectangle
 from math import ceil, floor
 
 
@@ -21,7 +22,7 @@ def compute_prices(S, K, r, sigma, T, buy):
     return call-buy, put-buy
 
 
-def price_heatmap(spot_range=0.1, vol_range=0.1):
+def price_heatmap():
     spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
     vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
     grid_spots = np.full(shape=(9, 9), fill_value=spots)
@@ -64,26 +65,34 @@ with cols[1]:
     st.button("📊 Implied Volatility Surface", on_click=update_tab, args=('volatility',),
               use_container_width=True, type='primary' if st.session_state.active_tab == 'volatility' else 'secondary')
 with cols[2]:
-    st.button("ℹ️ Explanation", on_click=update_tab, args=('about',),
+    st.button("ℹ️ About", on_click=update_tab, args=('about',),
               use_container_width=True, type='primary' if st.session_state.active_tab == 'about' else 'secondary')
 
 # sidebar content based on active tab
 with st.sidebar:
-    st.title("Parameters")
+    st.title(" Parameters")
     col1, col2 = st.columns(2)
     if st.session_state.active_tab == 'prices':
         show_pnl = st.checkbox("show PnL")
         with col1:
             S = st.number_input("Current Price ($S$)", value=100.0)
-            r = st.number_input("Risk-Free Rate ($r$)", value=0.05)
-            sigma = st.number_input(f"Volatility ($\\sigma$)", value=0.10)
+            r = st.number_input("Interest Rate ($r$) in %",
+                                value=8., step=0.5)/100
+            T = st.number_input("Maturity ($T$) in years",
+                                value=1.0, step=1.0/24)
         with col2:
-            K = st.number_input("Strike Price ($K$)", value=100.0)
-            T = st.number_input("Maturity ($T$) in years", value=1.0)
+            K = st.number_input("Strike Price ($K$)", value=105.0)
+            sigma = st.number_input(
+                f"Volatility ($\\sigma$) in %", value=10., step=0.5)/100
             if show_pnl:
-                buy = st.number_input("Option Price", value=3.5)
+                buy = st.number_input("Purchase Value", value=5.5)
             else:
                 buy = 0
+        st.header("Heatmap Settings")
+        vol_range = st.slider('Range of Stock Volatility (% of $\\sigma$)',
+                              min_value=1, max_value=100, value=10, step=1)/100
+        spot_range = st.slider('Range of Current Stock Price (% of $S$)',
+                               min_value=1, max_value=15, value=10, step=1)/100
 
     elif st.session_state.active_tab == 'volatility':
         with col1:
@@ -105,8 +114,13 @@ with st.sidebar:
 
     # Global settings
     st.markdown("---")
-    st.header("Global Settings")
-    theme = st.selectbox("Theme", ["Dark", "Light"])
+    st.write('`Created by:`')
+    st.write('''Gabriel Vidal<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">''', unsafe_allow_html=True)
+    st.write('''<a href="https://linkedin.com/in/gabovidal" style="text-decoration:none; color:inherit;" class="list-group-item"><i class="fab fa-linkedin" style='font-size:24px'></i></a> <a href="https://github.com/gabovidal" style="text-decoration:none; color:inherit;" class="list-group-item"><i class="fab fa-github-square" style='font-size:24px'></i></a>''',
+             unsafe_allow_html=True)
+    st.write('''''',
+             unsafe_allow_html=True)
+
 
 # Main content based on active tab
 if st.session_state.active_tab == 'prices':
@@ -117,21 +131,21 @@ if st.session_state.active_tab == 'prices':
         if show_pnl:
             vmin = min(calls.min(), puts.min())
             vmax = max(calls.max(), puts.max())
-            v = floor(min(abs(vmin), abs(vmax)))
-            def copysign(x, y): return x if y > 0 else -x
-            vmin, vmax = copysign(v, vmin), copysign(v, vmax)
+            # v = floor(min(abs(vmin), abs(vmax)))
+            # def copysign(x, y): return x if y > 0 else -x
+            # vmin, vmax = copysign(v, vmin), copysign(v, vmax)
 
             fig, (ax_call, ax_put) = plt.subplots(1, 2, figsize=(16, 5))
             fig.tight_layout()
 
-            log_norm = SymLogNorm(0.50, vmin=vmin, vmax=vmax)
-            ticks = np.concatenate((-np.logspace(np.log10(v), np.log10(0.001), 4)
-                                    [:-2], [0], np.logspace(np.log10(0.001), np.log10(v), 4)[2:]))
-            formatter = tkr.ScalarFormatter(useMathText=True)
-            formatter.set_scientific(False)
+            # log_norm = SymLogNorm(0.50, vmin=vmin, vmax=vmax)
+            # ticks = np.concatenate((-np.logspace(np.log10(v), np.log10(0.001), 4)
+            #                        [:-2], [0], np.logspace(np.log10(0.001), np.log10(v), 4)[2:]))
+            # formatter = tkr.ScalarFormatter(useMathText=True)
+            # formatter.set_scientific(False)
 
-            vols = np.linspace(sigma*0.9, sigma*1.1, 9)
-            spots = np.linspace(S*0.9, S*1.1, 9)
+            vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
+            spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
             if colorblind:
                 palette = 'viridis'
             else:
@@ -141,18 +155,26 @@ if st.session_state.active_tab == 'prices':
                     # , norm=log_norm, cbar_kws={"ticks": ticks, "format": formatter})
                     vols*100, 2), fmt="+.2f", annot=True, center=0, vmin=vmin, vmax=vmax)
                 ax.collections[0].colorbar.ax.yaxis.set_ticks([], minor=True)
-                ax.set_title(f'Expected {title} PnL', fontsize=16, pad=10)
-                ax.set_xlabel('Spot Price (S)', fontsize=13)
-                ax.set_ylabel('Volatility (\\sigma) in %', fontsize=13)
+                ax.set_title(f'{title} PnL $ = {
+                             values[4, 4]:+.2f}', fontsize=16, pad=10)
+                ax.set_xlabel('Current Stock Price (S)', fontsize=13)
+                ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
                 ax.invert_yaxis()
+                ax.add_patch(
+                    Rectangle((4, 0), 1, 9, edgecolor='black', fill=False, lw=1, alpha=0.8))
+                ax.add_patch(
+                    Rectangle((0, 4), 9, 1, edgecolor='black',
+                              fill=False, lw=1, alpha=0.8))
+                ax.add_patch(
+                    Rectangle((4, 4), 1, 1, edgecolor='black', fill=False, lw=2))
         else:
             vmax = max(calls.max(), puts.max())
 
             fig, (ax_call, ax_put) = plt.subplots(1, 2, figsize=(16, 5))
             fig.tight_layout()
 
-            vols = np.linspace(sigma*0.9, sigma*1.1, 9)
-            spots = np.linspace(S*0.9, S*1.1, 9)
+            vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
+            spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
             if colorblind:
                 palette = 'viridis'
             else:
@@ -160,10 +182,18 @@ if st.session_state.active_tab == 'prices':
             for title, values, ax in [('CALL', calls, ax_call), ('PUT', puts, ax_put)]:
                 sns.heatmap(values, cmap=palette, ax=ax, xticklabels=np.round(
                     spots, 2), yticklabels=np.round(vols*100, 2), fmt=".2f", annot=True, vmin=0, vmax=vmax)
-                ax.set_title(f'Expected {title} PRICES', fontsize=16, pad=10)
-                ax.set_xlabel('Current Price (S)', fontsize=13)
-                ax.set_ylabel(f'Volatility ($\\sigma$) in %', fontsize=13)
+                ax.set_title(f'{title} Price $ = {
+                             values[4, 4]:.2f}', fontsize=16, pad=10)
+                ax.set_xlabel('Current Stock Price (S)', fontsize=13)
+                ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
                 ax.invert_yaxis()
+                ax.add_patch(
+                    Rectangle((4, 0), 1, 9, edgecolor='black', fill=False, lw=1, alpha=0.8))
+                ax.add_patch(
+                    Rectangle((0, 4), 9, 1, edgecolor='black',
+                              fill=False, lw=1, alpha=0.8))
+                ax.add_patch(
+                    Rectangle((4, 4), 1, 1, edgecolor='black', fill=False, lw=2))
         st.pyplot(fig)
 
 elif st.session_state.active_tab == 'volatility':
@@ -177,7 +207,7 @@ elif st.session_state.active_tab == 'about':
     st.markdown("""
     ### 📈 Option Pricing
     - TODO
-    
+
     ### 📊 Implied Volatility Surface
     - TODO
     """)
