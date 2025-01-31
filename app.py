@@ -71,7 +71,7 @@ with cols[2]:
 
 # sidebar content based on active tab
 with st.sidebar:
-    st.title(" Parameters")
+    st.title("Parameters")
     col1, col2 = st.columns(2)
     if st.session_state.active_tab == 'prices':
         show_pnl = st.checkbox("show PnL")
@@ -90,9 +90,9 @@ with st.sidebar:
             else:
                 buy = 0
         st.header("Heatmap Settings")
-        vol_range = st.slider('Range of Stock Volatility (% of $\\sigma$)',
+        vol_range = st.slider('Variation of Volatility ($\\pm\\Delta\\sigma/\\sigma$)',
                               min_value=1, max_value=100, value=10, step=1)/100
-        spot_range = st.slider('Range of Current Stock Price (% of $S$)',
+        spot_range = st.slider('Variation of Current Price ($\\pm\\Delta S/S$)',
                                min_value=1, max_value=15, value=10, step=1)/100
 
     elif st.session_state.active_tab == 'volatility':
@@ -123,7 +123,30 @@ with st.sidebar:
             # cleaning data
             df['option_price'] = (df['ask']+df['bid'])/2
             df = df[['option_price', 'strike', 'time']].dropna()
+
+            strike = df['strike'].values
+            time = df['time'].values
+            option_price = df['option_price'].values
+            iv = np.array([ImpliedVolatility(spot_price, strike[i], r, time[i], option_price[i],
+                                             option_type) for i in range(len(strike))])
+            df['iv'] = iv
+
+            df = df.dropna()
+
             return spot_price, df
+
+        def ImpliedVolatility(S, K, r, T, price, TYPE):
+            if price < 0:
+                return np.nan
+
+            def fun(sigma):
+                call, put = compute_prices(S, K, r, sigma, T)
+                value = call if TYPE == 'Calls' else put
+                return value - price
+            try:
+                return brentq(fun, -1e-3, 3)
+            except (ValueError, RuntimeError):
+                return np.nan
 
         with col1:
             ticker = st.text_input("Stock Ticker", "AAPL").upper()
@@ -135,13 +158,22 @@ with st.sidebar:
             end_date = st.date_input(
                 "End Date", datetime.today() + timedelta(days=92))
         st.header('3D Plot Settings')
-        max_iv = st.slider('Max Implied Volatility (%)',
-                           min_value=100, max_value=500, value=100, step=1)/100
         spot_price, df = get_data(ticker, start_date, end_date)
-        strike_min = df['strike'].values.mean()
-        strike_max = df['strike'].values.max()
-        max_strike = st.slider('Max Strike Price',
-                               min_value=strike_min, max_value=strike_max, value=strike_max, step=1.0)
+        slide_vol_min = max(df.iv.min(), 0.)
+        slide_vol_max = df.iv.max()
+
+        min_iv, max_iv = st.slider('Range of Implied Volatility',
+                                   min_value=slide_vol_min, max_value=slide_vol_max, value=(0.1, 2.0), step=0.01)
+        min_iv, max_iv = min_iv, max_iv
+        slide_strike_min = df.strike.mean()
+        slide_strike_max = df.strike.max()
+        min_strike, max_strike = st.slider('Range of Strike Price',
+                                           min_value=slide_strike_min, max_value=slide_strike_max, value=(slide_strike_min, slide_strike_max), step=0.01)
+        df = df[(df['strike'] < max_strike) & (df['strike'] > min_strike) & (
+            df['iv'] < max_iv) & (df['iv'] > min_iv)]
+        strike = df['strike'].values
+        time = df['time'].values
+        iv = df['iv'].values
 
     elif st.session_state.active_tab == 'about':
         # st.header("About")
@@ -184,7 +216,7 @@ def plot_heatmap(TYPE, values, ax, vols, spots, palette, show_pnl=False, center=
 # Main content based on active tab
 if st.session_state.active_tab == 'prices':
     col1, col2 = st.columns([1, 1])
-    colorblind = st.checkbox("Color blind-friendly palette")
+    colorblind = st.checkbox("color blind-friendly palette")
     palette = 'viridis' if colorblind else 'RdYlGn'
     vols = np.linspace(sigma*(1-vol_range), sigma*(1+vol_range), 9)
     spots = np.linspace(S*(1-spot_range), S*(1+spot_range), 9)
@@ -206,37 +238,6 @@ if st.session_state.active_tab == 'prices':
             st.pyplot(fig)
 
 elif st.session_state.active_tab == 'volatility':
-
-    def ImpliedVolatility(S, K, r, T, price, TYPE):
-        if price < 0:
-            return np.nan
-
-        def fun(sigma):
-            call, put = compute_prices(S, K, r, sigma, T)
-            value = call if TYPE == 'Calls' else put
-            return value - price
-        try:
-            return brentq(fun, 1e-8, max_iv)
-        except (ValueError, RuntimeError):
-            return np.nan
-
-    strike = df['strike'].values
-    time = df['time'].values
-    option_price = df['option_price'].values
-    iv = np.array([ImpliedVolatility(spot_price, strike[i], r, time[i], option_price[i],
-                  # iv_df['impliedVolatility'].values
-                                     option_type) for i in range(len(strike))])
-    df['iv'] = iv
-
-    df = df.dropna()
-    strike = df['strike'].values
-    time = df['time'].values
-    iv = df['iv'].values
-
-    # print(df)
-
-    # print(len(strike),len(time),len(iv))
-
     grid_strike, grid_time = np.meshgrid(
         np.linspace(strike.min(), strike.max(), 100),
         np.linspace(time.min(), time.max(), 100)
@@ -246,13 +247,13 @@ elif st.session_state.active_tab == 'volatility':
                        (grid_strike, grid_time), 'cubic')  # 'linear'?
 
     col = st.columns(1)[0]
-    bumpy = st.checkbox('Contrast bumpiness')
+    bumpy = st.checkbox('contrast bumpiness')
     with col:
         if bumpy:
             grad_x, grad_y = np.gradient(grid_iv)
             grad_xx, grad_xy = np.gradient(grad_x)
             grad_yx, grad_yy = np.gradient(grad_y)
-            colormap = np.array([[(grad_x[i][j]**2 + grad_y[i][j]**2)*(grad_xx[i][j]*grad_yy[i][j]+grad_xy[i][j]*grad_yx[i][j])
+            colormap = np.array([[(grad_xx[i][j]*grad_yy[i][j]+grad_xy[i][j]*grad_yx[i][j])
                                   for j in range(len(grad_x))] for i in range(len(grad_x))])
             colormap = np.log(np.abs(colormap))
         else:
@@ -275,7 +276,7 @@ elif st.session_state.active_tab == 'volatility':
 
         fig.update_layout(
             title=f'Implied Volatility for {ticker} {
-                option_type} (ignoring dividends)',
+                option_type} (no dividends)',
             scene=dict(
                 xaxis_title='Strike Price',
                 yaxis_title='Maturity (years)',
@@ -288,16 +289,39 @@ elif st.session_state.active_tab == 'volatility':
             width=700
         )
         fig.update_scenes(xaxis_autorange="reversed")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True,
+                        config={'displayModeBar': False})
 
 elif st.session_state.active_tab == 'about':
-    st.markdown("""
-    ### 📈 Option Pricing
-    - TODO
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        ### 📈 Option Pricing
+        - TODO
 
-    ### 📊 Implied Volatility Surface
-    - TODO
-    """)
+        ### 📊 Implied Volatility Surface
+        - TODO
+        """)
+    with col2:
+        mu = 0.05  # risk-free interest rate
+        sigma = 0.10  # volatility
+        S = 100  # (current) spot price
+        n = 500  # number of time series steps
+        T = 1  # time to maturity
+        m = 100  # number of simulations
+
+        dt = T/n
+        dlogSt = mu * dt + sigma * \
+            np.random.normal(0, np.sqrt(dt), size=(m, n))
+        St = S * np.exp(np.cumsum(dlogSt, axis=-1))
+        t = np.full(shape=(m, n), fill_value=np.linspace(0, T, n))
+
+        fig, ax = plt.subplots(figure=(6, 5))
+        ax.plot(t.T, St.T)
+        ax.set_title(f"Realizations of a Geometric Brownian Motion")
+        ax.set_xlabel("time ($t$) in years")
+        ax.set_ylabel("Stock Price ($S_t$) over time")
+        st.pyplot(fig)
 
 # Add custom CSS for tab styling
 st.markdown("""
