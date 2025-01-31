@@ -316,7 +316,7 @@ elif st.session_state.active_tab == 'about':
         St = S * np.exp(np.cumsum(dlogSt, axis=-1))
         t = np.full(shape=(m, n), fill_value=np.linspace(0, T, n))
 
-        fig, ax = plt.subplots(figure=(6, 5))
+        fig, ax = plt.subplots(figsize=(6, 5))
         ax.plot(t.T, St.T)
         ax.set_title(f"Realizations of a Geometric Brownian Motion")
         ax.set_xlabel("time ($t$) in years")
