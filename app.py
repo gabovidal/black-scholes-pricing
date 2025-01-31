@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import streamlit as st
 import plotly.graph_objects as go
 from scipy.interpolate import griddata
+from scipy.optimize import brentq
 import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm, Normalize
 import matplotlib.ticker as tkr
@@ -14,7 +15,7 @@ from math import ceil, floor
 import seaborn as sns
 
 
-def compute_prices(S, K, r, sigma, T, buy):
+def compute_prices(S, K, r, sigma, T, buy=0):
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
     call = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
@@ -85,7 +86,7 @@ with st.sidebar:
             sigma = st.number_input(
                 f"Volatility ($\\sigma$) in %", value=10., step=0.5)/100
             if show_pnl:
-                buy = st.number_input("Purchase Value", value=5.5)
+                buy = st.number_input("Purchase Value", value=5.5, key='buy')
             else:
                 buy = 0
         st.header("Heatmap Settings")
@@ -95,16 +96,52 @@ with st.sidebar:
                                min_value=1, max_value=15, value=10, step=1)/100
 
     elif st.session_state.active_tab == 'volatility':
+        def get_data(ticker, start_date, end_date):
+            stock = yf.Ticker(ticker)
+            exp_dates = stock.options
+            spot_price = stock.info['previousClose']
+
+            # filter by input dates
+            start_ts = pd.Timestamp(start_date)
+            end_ts = pd.Timestamp(end_date)
+            valid_expirations = [
+                d for d in exp_dates if start_ts <= pd.Timestamp(d) <= end_ts]
+
+            options_data = []
+            for exp in valid_expirations:
+                chain = stock.option_chain(exp)
+                df = chain.calls if option_type == "Call" else chain.puts
+                df['expiration'] = exp
+                options_data.append(df)
+
+            df = pd.concat(options_data, ignore_index=True)
+
+            # time to expiration
+            today = pd.Timestamp.today()
+            df['exp_date'] = pd.to_datetime(df['expiration'])
+            df['time'] = (df['exp_date'] - today).dt.days / 365
+            # cleaning data
+            df['option_price'] = (df['ask']+df['bid'])/2
+            df = df[['option_price', 'strike', 'time']].dropna()
+            return spot_price, df
+
         with col1:
-            r = st.number_input("Risk-Free Rate ($r$)", value=0.05)
             ticker = st.text_input("Stock Ticker", "AAPL").upper()
             start_date = st.date_input(
                 "Start Date", datetime.today() + timedelta(days=2))
+            r = st.number_input("Risk-Free Rate ($r$)", value=0.05)
         with col2:
-            q = st.number_input("Dividend Yield ($q$)", value=0.01)
             option_type = st.selectbox("Option Type", ["Calls", "Puts"])
             end_date = st.date_input(
                 "End Date", datetime.today() + timedelta(days=92))
+        st.header('3D Plot Settings')
+        max_iv = st.slider('Max Implied Volatility (%)',
+                           min_value=100, max_value=500, value=100, step=1)/100
+        spot_price, df = get_data(ticker, start_date, end_date)
+        strike_min = df['strike'].values.mean()
+        strike_max = df['strike'].values.max()
+        max_strike = st.slider('Max Strike Price',
+                               min_value=strike_min, max_value=strike_max, value=strike_max, step=1.0)
 
     elif st.session_state.active_tab == 'about':
         # st.header("About")
@@ -128,9 +165,9 @@ def plot_heatmap(TYPE, values, ax, vols, spots, palette, show_pnl=False, center=
     ax.collections[0].colorbar.ax.yaxis.set_ticks([], minor=True)
     price = values[4, 4]
     if show_pnl:
-        title = f'{TYPE} PnL = {price:+.2f}'
+        title = f'Expected {TYPE} PnL = {price:+.2f}'
     else:
-        title = f'{TYPE} Price = {price:.2f}'
+        title = f'Expected {TYPE} Price = {price:.2f}'
     ax.set_title(title, fontsize=18, fontweight='bold', pad=12)
     ax.set_xlabel('Current Stock Price (S)', fontsize=13)
     ax.set_ylabel('Volatility ($\\sigma$) in %', fontsize=13)
@@ -169,11 +206,89 @@ if st.session_state.active_tab == 'prices':
             st.pyplot(fig)
 
 elif st.session_state.active_tab == 'volatility':
-    st.header("TODO")
-    # Add your price history code here
-    # if 'hist_ticker' in locals() and hist_ticker:
-    #    # Existing price history implementation
-    #    pass
+
+    def ImpliedVolatility(S, K, r, T, price, TYPE):
+        if price < 0:
+            return np.nan
+
+        def fun(sigma):
+            call, put = compute_prices(S, K, r, sigma, T)
+            value = call if TYPE == 'Calls' else put
+            return value - price
+        try:
+            return brentq(fun, 1e-8, max_iv)
+        except (ValueError, RuntimeError):
+            return np.nan
+
+    strike = df['strike'].values
+    time = df['time'].values
+    option_price = df['option_price'].values
+    iv = np.array([ImpliedVolatility(spot_price, strike[i], r, time[i], option_price[i],
+                  # iv_df['impliedVolatility'].values
+                                     option_type) for i in range(len(strike))])
+    df['iv'] = iv
+
+    df = df.dropna()
+    strike = df['strike'].values
+    time = df['time'].values
+    iv = df['iv'].values
+
+    # print(df)
+
+    # print(len(strike),len(time),len(iv))
+
+    grid_strike, grid_time = np.meshgrid(
+        np.linspace(strike.min(), strike.max(), 100),
+        np.linspace(time.min(), time.max(), 100)
+    )
+
+    grid_iv = griddata((strike, time), iv,
+                       (grid_strike, grid_time), 'cubic')  # 'linear'?
+
+    col = st.columns(1)[0]
+    bumpy = st.checkbox('Contrast bumpiness')
+    with col:
+        if bumpy:
+            grad_x, grad_y = np.gradient(grid_iv)
+            grad_xx, grad_xy = np.gradient(grad_x)
+            grad_yx, grad_yy = np.gradient(grad_y)
+            colormap = np.array([[(grad_x[i][j]**2 + grad_y[i][j]**2)*(grad_xx[i][j]*grad_yy[i][j]+grad_xy[i][j]*grad_yx[i][j])
+                                  for j in range(len(grad_x))] for i in range(len(grad_x))])
+            colormap = np.log(np.abs(colormap))
+        else:
+            colormap = None
+
+        fig = go.Figure(data=[
+            go.Surface(
+                x=grid_strike,
+                y=grid_time,
+                z=grid_iv,
+                colorscale='viridis',
+                opacity=0.8,
+                contours={
+                    "z": {"show": True, "start": iv.min(), "end": iv.max(), "size": 0.02}
+                },
+                surfacecolor=colormap,
+                showscale=False
+            )
+        ])
+
+        fig.update_layout(
+            title=f'Implied Volatility for {ticker} {
+                option_type} (ignoring dividends)',
+            scene=dict(
+                xaxis_title='Strike Price',
+                yaxis_title='Maturity (years)',
+                zaxis_title='Implied Volatility',
+                camera=dict(eye=dict(x=1.2, y=1.2, z=0.8)),
+                aspectratio=dict(x=1, y=1, z=0.5)
+            ),
+            margin=dict(l=0, r=0, b=0, t=30),
+            height=400,
+            width=700
+        )
+        fig.update_scenes(xaxis_autorange="reversed")
+        st.plotly_chart(fig, use_container_width=True)
 
 elif st.session_state.active_tab == 'about':
     st.markdown("""
