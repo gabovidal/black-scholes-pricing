@@ -71,9 +71,9 @@ with cols[2]:
 
 # sidebar content based on active tab
 with st.sidebar:
-    st.title("Parameters")
-    col1, col2 = st.columns(2)
     if st.session_state.active_tab == 'prices':
+        st.title("Parameters")
+        col1, col2 = st.columns(2)
         show_pnl = st.checkbox("show PnL")
         with col1:
             S = st.number_input("Current Price ($S$)", value=100.0)
@@ -94,8 +94,12 @@ with st.sidebar:
                               min_value=1, max_value=100, value=10, step=1)/100
         spot_range = st.slider('Variation of Current Price ($\\pm\\Delta S/S$)',
                                min_value=1, max_value=15, value=10, step=1)/100
+        st.markdown("---")
 
     elif st.session_state.active_tab == 'volatility':
+        st.title("Parameters")
+        col1, col2 = st.columns(2)
+
         def get_data(ticker, start_date, end_date):
             stock = yf.Ticker(ticker)
             exp_dates = stock.options
@@ -174,15 +178,11 @@ with st.sidebar:
         strike = df['strike'].values
         time = df['time'].values
         iv = df['iv'].values
+        st.markdown("---")
 
     elif st.session_state.active_tab == 'about':
-        # st.header("About")
-        st.write("Data:")
-        st.write("- **Volatility**:")
-        st.write("- **Current Price**: ")
+        pass
 
-    # Global settings
-    st.markdown("---")
     st.write('`Created by:`')
     st.write('''Gabriel Vidal<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">''', unsafe_allow_html=True)
     st.write('''<a href="https://linkedin.com/in/gabovidal" style="text-decoration:none; color:inherit;" class="list-group-item"><i class="fab fa-linkedin" style='font-size:24px'></i></a> <a href="https://github.com/gabovidal" style="text-decoration:none; color:inherit;" class="list-group-item"><i class="fab fa-github-square" style='font-size:24px'></i></a>''',
@@ -297,10 +297,12 @@ elif st.session_state.active_tab == 'about':
     with col1:
         st.markdown("""
         ### 📈 Option Pricing
-        - TODO
+        - In this simple model, we use the Black-Scholes Formula to calculate the expected value of the options, given Current Price, Strike Price, Risk-Free Interest Rate, Volatility and Time to Maturity.
+        - The PnL is calculated by subtracting the purchase value of the option.
+        - The following plot of stock price over time is for illustration purposes only.
 
         ### 📊 Implied Volatility Surface
-        - TODO
+        - The implied volatility is calculated by using the Black-Scholes Pricing Model given Strike Price, Current Price, Time to Maturity, Risk-free Interest Rate and Call/Put Option Purchase Price, and inverting the function to find the volatility.
         """)
     with col2:
         mu = 0.05  # risk-free interest rate
